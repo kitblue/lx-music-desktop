@@ -1,0 +1,108 @@
+name: build-win-green
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [master]
+    paths:
+      - '.github/workflows/build-win-green.yml'
+      - 'build-config/build-pack.js'
+      - 'build-config/build-after-pack.js'
+
+jobs:
+  build:
+    runs-on: windows-latest
+    timeout-minutes: 90
+    permissions:
+      contents: write
+    env:
+      PYTHONIOENCODING: utf-8
+      PYTHONUTF8: '1'
+      RELEASE_TAG: v2.12.6-kitblue.1
+      PKG_VERSION: 2.12.6-kitblue.1
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Init UTF-8 console
+        shell: pwsh
+        run: |
+          chcp 65001 > $null
+          [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+          $OutputEncoding = [System.Text.Encoding]::UTF8
+          Write-Host "console encoding: utf-8 (cp65001)"
+
+      - name: Set package version
+        shell: pwsh
+        run: |
+          chcp 65001 > $null
+          [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+          npm version $env:PKG_VERSION --no-git-tag-version --allow-same-version
+          node -p "require('./package.json').version"
+
+      - name: Install dependencies
+        shell: pwsh
+        env:
+          ELECTRON_MIRROR: https://npmmirror.com/mirrors/electron/
+        run: |
+          chcp 65001 > $null
+          [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+          npm config set registry https://registry.npmjs.org
+          npm ci --no-audit --fund=false
+
+      - name: Build bundles
+        shell: pwsh
+        env:
+          NODE_OPTIONS: --max-old-space-size=4096
+        run: |
+          chcp 65001 > $null
+          [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+          npm run build
+
+      - name: Pack green 7z
+        shell: pwsh
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+          ELECTRON_MIRROR: https://npmmirror.com/mirrors/electron/
+          ELECTRON_BUILDER_BINARIES_MIRROR: https://npmmirror.com/mirrors/electron-builder-binaries/
+          NODE_OPTIONS: --max-old-space-size=4096
+        run: |
+          chcp 65001 > $null
+          [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+          npm run pack:win:7z:x64
+
+      - name: Verify artifact
+        shell: pwsh
+        run: |
+          chcp 65001 > $null
+          [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+          $f = Get-ChildItem build -Filter '*.7z' -Recurse | Sort-Object Length -Descending | Select-Object -First 1
+          if (-not $f) { throw 'no 7z artifact produced' }
+          Write-Host ("artifact: {0}  {1:N1} MB" -f $f.Name, ($f.Length / 1MB))
+          "artifact_path=$($f.FullName)" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: lx-music-desktop-green
+          path: ${{ env.artifact_path }}
+          if-no-files-found: error
+
+      - name: Publish / replace release asset
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ env.RELEASE_TAG }}
+          name: LX Music Desktop ${{ env.PKG_VERSION }} (green portable)
+          body: |
+            Windows x64 绿色便携版，解压即用。
+
+            便携化：包内 `portable` 目录存在时，配置/歌单/缓存写入程序目录下 `portable/userData`，
+            不写 AppData、不改注册表；删除整个目录即彻底清除。
+          prerelease: true
+          overwrite_files: true
+          files: ${{ env.artifact_path }}
+          fail_on_unmatched_files: true
