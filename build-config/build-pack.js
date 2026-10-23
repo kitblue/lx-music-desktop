@@ -36,6 +36,7 @@ const options = {
     'node_modules/bufferutil',
     'node_modules/utf-8-validate',
     'dist/**/*',
+    '!dist/**/*.map',
   ],
   asar: {
     smartUnpack: false,
@@ -46,7 +47,7 @@ const options = {
   publish: [
     {
       provider: 'github',
-      owner: 'lyswhut',
+      owner: 'kitblue',
       repo: 'lx-music-desktop',
     },
   ],
@@ -54,6 +55,11 @@ const options = {
 /**
  * @type {import('electron-builder').Configuration}
  * @see https://www.electron.build/configuration/configuration
+ */
+// 绿色版（7z）内置 portable 目录：应用启动时检测到该目录，会把用户数据写入程序目录
+const portableExtraFiles = [{ from: './build-config/portable', to: 'portable' }]
+/**
+ * @type {import('electron-builder').Configuration}
  */
 const winOptions = {
   win: {
@@ -174,24 +180,28 @@ const createTarget = {
     switch (packageType) {
       case 'setup':
         winOptions.artifactName = `\${productName}-v\${version}-${arch}-Setup.\${ext}`
+        delete winOptions.extraFiles
         return {
           buildOptions: { win: ['nsis'] },
           options: winOptions,
         }
       case 'green':
         winOptions.artifactName = `\${productName}-v\${version}-win_${arch}-green.\${ext}`
+        winOptions.extraFiles = portableExtraFiles
         return {
           buildOptions: { win: ['7z'] },
           options: winOptions,
         }
       case 'win7_setup':
         winOptions.artifactName = `\${productName}-v\${version}-win7_${arch}-Setup.\${ext}`
+        delete winOptions.extraFiles
         return {
           buildOptions: { win: ['nsis'] },
           options: winOptions,
         }
       case 'win7_green':
         winOptions.artifactName = `\${productName}-v\${version}-win7_${arch}-green.\${ext}`
+        winOptions.extraFiles = portableExtraFiles
         return {
           buildOptions: { win: ['7z'] },
           options: winOptions,
