@@ -83,6 +83,13 @@ jobs:
           $f = Get-ChildItem build -Filter '*.7z' -Recurse | Sort-Object Length -Descending | Select-Object -First 1
           if (-not $f) { throw 'no 7z artifact produced' }
           Write-Host ("artifact: {0}  {1:N1} MB" -f $f.Name, ($f.Length / 1MB))
+          $seven = "node_modules\7zip-bin\win\x64\7za.exe"
+          if (-not (Test-Path $seven)) { $seven = "C:\Program Files\7-Zip\7z.exe" }
+          $listing = & $seven l $f.FullName
+          $portableHit = $listing | Select-String -SimpleMatch 'portable'
+          if (-not $portableHit) { throw 'portable marker missing in archive (green mode broken)' }
+          $localeCount = ($listing | Select-String -SimpleMatch '\locales\' | Measure-Object).Count
+          Write-Host "portable marker: OK | locale files: $localeCount"
           "artifact_path=$($f.FullName)" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
 
       - name: Upload artifact
